@@ -6,11 +6,12 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QListWidget, QListWidgetItem, QProgressBar,
     QGroupBox, QTextEdit, QAbstractItemView, QMessageBox,
-    QFrame, QScrollArea, QSplitter, QSizePolicy
+    QFrame, QScrollArea, QSplitter, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont
 
+from downloader.manager import parse_chapter_selection
 from models import MangaInfo, Chapter
 from gui.workers import ScraperWorker, DownloadWorker
 from gui.theme import COLORS
@@ -315,7 +316,19 @@ class DownloadFrame(QWidget):
         
         toolbar_layout.addStretch()
         
+        scanlator_label = QLabel("Filter Scanlator:")
+        scanlator_label.setStyleSheet(f"color: {COLORS['text_secondary']}; background: transparent;")
+        toolbar_layout.addWidget(scanlator_label)
+        
+        self.scanlator_filter = QComboBox()
+        self.scanlator_filter.setMinimumHeight(36)
+        self.scanlator_filter.setMinimumWidth(150)
+        self.scanlator_filter.addItem("All Scanlators", None)
+        self.scanlator_filter.currentIndexChanged.connect(self.update_chapter_list)
+        toolbar_layout.addWidget(self.scanlator_filter)
+        
         chapters_layout.addWidget(toolbar)
+
         
         # Chapter list
         self.chapter_list = QListWidget()
@@ -402,8 +415,8 @@ class DownloadFrame(QWidget):
         self.log_widget.setVisible(True)
     
     def on_selection_changed(self):
-        """Update selected count label."""
-        count = len(self.get_selected_indices())
+        """Update download button state based on selection."""
+        count = len(self.get_selected_chapters())
         self.selected_count_label.setText(f"{count} selected")
     
     def fetch_manga(self):
@@ -433,16 +446,39 @@ class DownloadFrame(QWidget):
         self.type_label.setText(f"📁 Type: {manga.manga_type}")
         self.chapters_count_label.setText(f"📚 {len(manga.chapters)} Chapters")
         
+        # Invalidate current scanlator filter
+        self.scanlator_filter.blockSignals(True)
+        self.scanlator_filter.clear()
+        self.scanlator_filter.addItem("All Scanlators", None)
+        for scanlator in manga.scanlators:
+            self.scanlator_filter.addItem(scanlator.name, scanlator.id)
+        self.scanlator_filter.blockSignals(False)
+        
         # Populate chapter list
+        self.update_chapter_list()
+        
+        self.content_widget.setVisible(True)
+        self.log(f"✓ Found {len(manga.chapters)} chapters", "success")
+
+    def update_chapter_list(self):
+        """Filter and display chapters based on selected scanlator."""
+        if not self.manga:
+            return
+            
+        selected_scan_id = self.scanlator_filter.currentData()
         self.chapter_list.clear()
-        for chapter in manga.chapters:
+        
+        for chapter in self.manga.chapters:
+            if selected_scan_id and chapter.scanlation_manga_id != selected_scan_id:
+                continue
+                
             item_text = f"Chapter {chapter.number}  •  {chapter.title}  •  {chapter.page_count} pages"
             item = QListWidgetItem(item_text)
             item.setData(Qt.ItemDataRole.UserRole, chapter)
             self.chapter_list.addItem(item)
-        
-        self.content_widget.setVisible(True)
-        self.log(f"✓ Found {len(manga.chapters)} chapters", "success")
+            
+        self.on_selection_changed()
+
     
     def on_fetch_error(self, error: str):
         """Handle fetch error."""
@@ -467,8 +503,7 @@ class DownloadFrame(QWidget):
         
         self.chapter_list.clearSelection()
         
-        from downloader.manager import parse_chapter_selection
-        indices = parse_chapter_selection(range_text, len(self.manga.chapters))
+        indices = parse_chapter_selection(range_text, self.chapter_list.count())
         
         for idx in indices:
             if idx < self.chapter_list.count():
@@ -478,34 +513,36 @@ class DownloadFrame(QWidget):
         
         self.log(f"Selected {len(indices)} chapters")
     
-    def get_selected_indices(self) -> List[int]:
-        """Get selected chapter indices."""
-        indices = []
+    def get_selected_chapters(self) -> List[Chapter]:
+        """Get selected chapter objects."""
+        chapters = []
         for i in range(self.chapter_list.count()):
             item = self.chapter_list.item(i)
             if item and item.isSelected():
-                indices.append(i)
-        return indices
+                chapter = item.data(Qt.ItemDataRole.UserRole)
+                if chapter:
+                    chapters.append(chapter)
+        return chapters
     
     def start_download(self):
         """Start downloading selected chapters."""
         if not self.manga:
             return
         
-        indices = self.get_selected_indices()
-        if not indices:
+        selected_chapters = self.get_selected_chapters()
+        if not selected_chapters:
             QMessageBox.warning(self, "No Selection", "Please select at least one chapter to download.")
             return
         
         self.download_btn.setEnabled(False)
         self.cancel_btn.setVisible(True)
-        self.progress_bar.setMaximum(len(indices))
+        self.progress_bar.setMaximum(len(selected_chapters))
         self.progress_bar.setValue(0)
         self.status_label.setText("Starting download...")
         
-        self.log(f"Starting download of {len(indices)} chapters...")
+        self.log(f"Starting download of {len(selected_chapters)} chapters...")
         
-        self.download_worker = DownloadWorker(self.manga, indices, self)
+        self.download_worker = DownloadWorker(self.manga, selected_chapters, self)
         self.download_worker.progress.connect(self.on_download_progress)
         self.download_worker.chapter_complete.connect(self.on_chapter_complete)
         self.download_worker.finished.connect(self.on_download_finished)

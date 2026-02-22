@@ -5,7 +5,41 @@ from typing import List, Optional, Tuple
 from rich.prompt import Prompt, IntPrompt, Confirm
 
 from config import get_config, save_config
-from models import Chapter
+from models import Chapter, Scanlator
+
+
+def prompt_scanlator_selection(scanlators: List[Scanlator]) -> Optional[str]:
+    """Prompt for scanlator selection.
+    
+    Returns:
+    - ID of the selected scanlator
+    - None for "All Scanlators"
+    - "cancelled" if user interrupts
+    """
+    if not scanlators:
+        return None
+        
+    console.print()
+    console.print("[bold cyan]Scanlator Filter:[/bold cyan]")
+    console.print("  [yellow]0[/yellow]: All Scanlators")
+    for i, scan in enumerate(scanlators, 1):
+        console.print(f"  [yellow]{i}[/yellow]: {scan.name}")
+    console.print()
+    
+    try:
+        choices = ["0"] + [str(i) for i in range(1, len(scanlators) + 1)]
+        choice = IntPrompt.ask(
+            "[bold cyan]Select scanlator to filter by[/bold cyan]",
+            choices=choices,
+            default=0
+        )
+        
+        if choice == 0:
+            return None
+        return scanlators[choice - 1].id
+    except KeyboardInterrupt:
+        return "cancelled"
+
 
 from .display import console, display_error, display_success
 

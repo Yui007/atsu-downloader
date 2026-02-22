@@ -8,7 +8,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from config import get_config
 from downloader import DownloadManager
-from models import MangaInfo, DownloadResult
+from models import MangaInfo, DownloadResult, Chapter
 
 
 class DownloadWorker(QThread):
@@ -19,10 +19,10 @@ class DownloadWorker(QThread):
     finished = pyqtSignal(list)  # List[DownloadResult]
     error = pyqtSignal(str)
     
-    def __init__(self, manga: MangaInfo, chapter_indices: List[int], parent=None):
+    def __init__(self, manga: MangaInfo, chapters: List[Chapter], parent=None):
         super().__init__(parent)
         self.manga = manga
-        self.chapter_indices = chapter_indices
+        self.chapters = chapters
         self._cancelled = False
     
     def cancel(self):
@@ -34,10 +34,10 @@ class DownloadWorker(QThread):
         try:
             config = get_config()
             results: List[DownloadResult] = []
-            total = len(self.chapter_indices)
+            total = len(self.chapters)
             completed = 0
             
-            chapters = [self.manga.chapters[i] for i in self.chapter_indices]
+            chapters = self.chapters
             
             self.progress.emit(0, total, "Starting concurrent downloads...")
             

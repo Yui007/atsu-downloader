@@ -31,6 +31,7 @@ from .prompts import (
     prompt_chapter_selection,
     prompt_settings_menu,
     confirm_download,
+    prompt_scanlator_selection,
 )
 
 # Create Typer app
@@ -74,17 +75,32 @@ def download_manga(url: str) -> None:
     # Display manga info
     display_manga_info(manga)
     
-    # Display chapters
-    display_chapters(manga.chapters, limit=config.max_display_chapters)
+    # Filter by scanlator if multiple choices
+    filtered_chapters = manga.chapters
+    if len(manga.scanlators) > 1:
+        scan_id = prompt_scanlator_selection(manga.scanlators)
+        if scan_id == "cancelled":
+            display_warning("Download cancelled")
+            return
+        if scan_id:
+            filtered_chapters = [c for c in manga.chapters if c.scanlation_manga_id == scan_id]
+            display_info(f"Filtered to [yellow]{len(filtered_chapters)}[/yellow] chapters from selected scanlator")
+
+    # Display chapters (already in descending order if we reverse them)
+    # We reverse them here so display_chapters and prompt_chapter_selection use the same order.
+    filtered_chapters.reverse()
+    
+    display_chapters(filtered_chapters, limit=config.max_display_chapters)
     
     # Get chapter selection
-    selection = prompt_chapter_selection(manga.chapters)
+    selection = prompt_chapter_selection(filtered_chapters)
+
     if not selection:
         display_warning("Download cancelled")
         return
     
     # Parse selection
-    indices = parse_chapter_selection(selection, len(manga.chapters))
+    indices = parse_chapter_selection(selection, len(filtered_chapters))
     if not indices:
         display_error("Invalid chapter selection")
         return
@@ -108,8 +124,23 @@ def download_manga(url: str) -> None:
         )
         
         with DownloadManager() as manager:
+            # We need to map filtered indices back to original indices IF download_chapters expects manga.chapters indices.
+            # However, looking at the code, it's safer to just provide a list of chapters sometimes, but let's see.
+            # Actually, manager.download_chapters(manga, indices) uses manga.chapters[idx].
+            # So we SHOULD handle the mapping.
+            
+            original_indices = []
+            for idx in indices:
+                chapter = filtered_chapters[idx]
+                # Find index in original manga.chapters
+                for i, c in enumerate(manga.chapters):
+                    if c.id == chapter.id:
+                        original_indices.append(i)
+                        break
+            
             # Use concurrent download
-            results = manager.download_chapters(manga, indices)
+            results = manager.download_chapters(manga, original_indices)
+
             
             for result in results:
                 if result.success:
@@ -225,6 +256,8 @@ def main(
                 display_error("Failed to fetch manga")
                 raise typer.Exit(1)
             
+            # Reverse chapters for consistent display/selection
+            manga.chapters.reverse()
             display_manga_info(manga)
             
             indices = parse_chapter_selection(chapters, len(manga.chapters))

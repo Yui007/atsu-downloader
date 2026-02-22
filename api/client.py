@@ -58,16 +58,31 @@ class AtsuClient:
 
     @retry_with_backoff
     def get_manga_info(self, manga_id: str) -> MangaInfo:
-        """Fetch manga information and chapter list."""
-        url = f"{BASE_URL}/api/manga/info"
-        params = {"mangaId": manga_id}
+        """Fetch manga information (metadata)."""
+        url = f"{BASE_URL}/api/manga/page"
+        params = {"id": manga_id}
         
-        logger.info(f"Fetching manga info for: {manga_id}")
+        logger.info(f"Fetching manga page info for: {manga_id}")
         response = self.session.get(url, params=params, timeout=30)
         response.raise_for_status()
         
         data = response.json()
         return MangaInfo.from_dict(data)
+
+    @retry_with_backoff
+    def get_all_chapters(self, manga_id: str) -> List[Chapter]:
+        """Fetch all chapters for a manga using the dedicated endpoint."""
+        url = f"{BASE_URL}/api/manga/allChapters"
+        params = {"mangaId": manga_id}
+        
+        logger.info(f"Fetching all chapters for: {manga_id}")
+        response = self.session.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        chapters_data = data.get("chapters", [])
+        
+        return [Chapter.from_dict(ch) for ch in chapters_data]
 
     @retry_with_backoff
     def get_chapter_pages(self, manga_id: str, chapter_id: str) -> List[Page]:
@@ -95,6 +110,7 @@ class AtsuClient:
             ))
         
         return pages
+
 
     @retry_with_backoff
     def download_image(self, image_path: str) -> bytes:

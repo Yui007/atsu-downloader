@@ -64,11 +64,20 @@ class MangaScraper:
             return None
         
         try:
-            logger.info(f"Fetching manga: {manga_id}")
-            return self.client.get_manga_info(manga_id)
+            logger.info(f"Fetching manga metadata: {manga_id}")
+            manga = self.client.get_manga_info(manga_id)
+            
+            if manga:
+                logger.info(f"Fetching all chapters for: {manga_id}")
+                all_chapters = self.client.get_all_chapters(manga_id)
+                manga.chapters = all_chapters
+                logger.info(f"Retrieved {len(all_chapters)} chapters.")
+                
+            return manga
         except Exception as e:
             logger.error(f"Failed to fetch manga info: {e}")
             return None
+
 
     def close(self):
         """Close resources."""

@@ -7,6 +7,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
+from rich import box
 from rich.progress import (
     Progress,
     TextColumn,
@@ -199,7 +200,7 @@ def create_download_progress() -> Progress:
         TextColumn("[bold blue]{task.description}"),
         BarColumn(bar_width=40),
         TaskProgressColumn(),
-        TextColumn("•"),
+        #TextColumn("•"),
         TimeRemainingColumn(),
         console=console,
         transient=False,
