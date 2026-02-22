@@ -9,6 +9,12 @@ Modern manga downloader for `atsu.moe` with both a full CLI and a PyQt6 desktop 
 
 Repository: `https://github.com/Yui007/atsu-downloader`
 
+## Screenshot
+
+Initial GUI view:
+
+![Atsu Downloader GUI Start Screen](gui.png)
+
 ## Highlights
 
 - Modular architecture: API client, scraper, download manager, converters, CLI, and GUI.
