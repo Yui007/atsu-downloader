@@ -13,6 +13,7 @@ from models import MangaInfo, Chapter, Page
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://atsu.moe"
+CDN_BASE_URL = "https://cdn.atsu.moe"
 
 
 def retry_with_backoff(func: Callable) -> Callable:
@@ -22,7 +23,7 @@ def retry_with_backoff(func: Callable) -> Callable:
         config = get_config()
         max_retries = config.max_retries
         base_delay = config.retry_delay
-        
+
         last_exception: Optional[requests.RequestException] = None
         for attempt in range(max_retries):
             try:
@@ -38,7 +39,7 @@ def retry_with_backoff(func: Callable) -> Callable:
                     time.sleep(delay)
                 else:
                     logger.error(f"Request failed after {max_retries} attempts: {e}")
-        
+
         if last_exception is not None:
             raise last_exception
         raise requests.RequestException("Max retries exceeded")
@@ -61,11 +62,11 @@ class AtsuClient:
         """Fetch manga information (metadata)."""
         url = f"{BASE_URL}/api/manga/page"
         params = {"id": manga_id}
-        
+
         logger.info(f"Fetching manga page info for: {manga_id}")
         response = self.session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        
+
         data = response.json()
         return MangaInfo.from_dict(data)
 
@@ -74,14 +75,14 @@ class AtsuClient:
         """Fetch all chapters for a manga using the dedicated endpoint."""
         url = f"{BASE_URL}/api/manga/allChapters"
         params = {"mangaId": manga_id}
-        
+
         logger.info(f"Fetching all chapters for: {manga_id}")
         response = self.session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        
+
         data = response.json()
         chapters_data = data.get("chapters", [])
-        
+
         return [Chapter.from_dict(ch) for ch in chapters_data]
 
     @retry_with_backoff
@@ -89,15 +90,15 @@ class AtsuClient:
         """Fetch chapter pages/images."""
         url = f"{BASE_URL}/api/read/chapter"
         params = {"mangaId": manga_id, "chapterId": chapter_id}
-        
+
         logger.info(f"Fetching chapter pages: {chapter_id}")
         response = self.session.get(url, params=params, timeout=30)
         response.raise_for_status()
-        
+
         data = response.json()
         read_chapter = data.get("readChapter", {})
         pages_data = read_chapter.get("pages", [])
-        
+
         pages = []
         for p in pages_data:
             pages.append(Page(
@@ -108,19 +109,19 @@ class AtsuClient:
                 height=p.get("height", 0),
                 aspect_ratio=p.get("aspectRatio", 0.0)
             ))
-        
+
         return pages
 
 
     @retry_with_backoff
     def download_image(self, image_path: str) -> bytes:
         """Download a single image and return bytes."""
-        url = f"{BASE_URL}{image_path}"
-        
+        url = f"{CDN_BASE_URL}{image_path}"
+
         logger.debug(f"Downloading image: {url}")
         response = self.session.get(url, timeout=60)
         response.raise_for_status()
-        
+
         return response.content
 
     def close(self):
